@@ -10,7 +10,7 @@ from keras.layers import Lambda
 from keras.layers import Activation
 from tensorflow.keras.layers import add, concatenate
 from keras.layers import AveragePooling2D
-from keras.utils import plot_model
+from tensorflow.keras.utils import plot_model
  
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report, cohen_kappa_score
@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    "--dataset", type=str, default=None, help="Dataset to use. available are IndianPines, Salinas, and PaviaU"
+    "--dataset", type=str, default=None, help="Dataset to use. available are IndianPines, Salinas, PaviaU, PaviaC, Botswana, and KSC"
 )
 parser.add_argument(
     "--test_ratio", type=float, default=0.95,  help="train-test split, defaults to 0.95. Cannot be higher than 0.99"
@@ -51,9 +51,6 @@ dataset = args.dataset
 test_ratio = args.test_ratio
 windowSize = args.windowSize
 EPOCH = args.epoch
-train1 = time.perf_counter()
-# Start training
-print("------START TRAIN------")
 
 def applyFA(X, numComponents=75):
     print('started applyFA')
@@ -87,6 +84,9 @@ def loadData(name):
     elif name == 'KSC':
         data = sio.loadmat(os.path.join(data_path, 'KSC.mat'))['KSC']
         labels = sio.loadmat(os.path.join(data_path, 'KSC_gt.mat'))['KSC_gt']
+    elif name == 'Fusion2018':
+        data = sio.loadmat(os.path.join(data_path, 'Fusion2018.mat'))['data']
+        labels = sio.loadmat(os.path.join(data_path, 'Fusion2018_gt.mat'))['A']
     return data, labels
 
 def splitTrainTestSet(X, y, testRatio, randomState=345):
@@ -123,9 +123,6 @@ def createImageCubes(X, y, windowSize=8, removeZeroLabels = True):
             patchesData[patchIndex, :, :, :] = patch
             patchesLabels[patchIndex] = y[r-margin, c-margin]
             patchIndex = patchIndex + 1
-            print("R{}:C{}/{}".format(r,c,zeroPaddedX.shape[1]))
-        print("R{}/{}".format(r,zeroPaddedX.shape[0]))
-    print('Finished double for loop')
     if removeZeroLabels:
         patchesData = patchesData[patchesLabels>0,:,:,:]
         patchesLabels = patchesLabels[patchesLabels>0]
@@ -154,6 +151,8 @@ elif (dataset == 'Botswana'):
     output_units = 14
 elif (dataset == 'KSC'):
     output_units = 13
+elif (dataset == 'Fusion2018'):
+    output_units = 20
 def WaveletTransformAxisY(batch_img):
     odd_img  = batch_img[:,0::2]
     even_img = batch_img[:,1::2]
@@ -387,6 +386,9 @@ def get_wavelet_cnn_model():
     plot_model(model, to_file='wavelet_cnn_0.5.png')
  
     return model
+train1 = time.perf_counter()
+# Start training
+print("------START TRAIN------")
 
 model = get_wavelet_cnn_model()
 print('Created model')
@@ -420,9 +422,10 @@ ytest = np_utils.to_categorical(ytest)
 
 Y_pred_test = model.predict(Xtest)
 y_pred_test = np.argmax(Y_pred_test, axis=1)
- 
-classification = classification_report(np.argmax(ytest, axis=1), y_pred_test)
-print(classification)
+
+# Removed due to redundancy 
+#classification = classification_report(np.argmax(ytest, axis=1), y_pred_test)
+#print(classification)
 
 def AA_andEachClassAccuracy(confusion_matrix):
     counter = confusion_matrix.shape[0]
@@ -533,7 +536,33 @@ def reports (X_test,y_test,name):
             "Mud flats",
             "Wate",
         ]
-    classification = classification_report(np.argmax(y_test, axis=1), y_pred, target_names=target_names)
+    elif name == 'Fusion2018':
+        target_names = [
+            "Healthy grass",
+            "Stressed grass",
+            "Artificial turf",
+            "Evergreen trees",
+            "Deciduous trees",
+            "Bare earth",
+            "Water",
+            "Residential buildings",
+            "Non-residential buildings",
+            "Roads",
+            "Sidewalks",
+            "Crosswalks",
+            "Major thoroughfares",
+            "Highways",
+            "Railways",
+            "Paved parking lots",
+            "Unpaved parking lots",
+            "Cars",
+            "Trains",
+            "Stadium seats",
+        ]
+    labels = []
+    for x in range(0,len(target_names),1):
+        labels.append(x)
+    classification = classification_report(np.argmax(y_test, axis=1), y_pred, labels=labels, target_names=target_names)
     oa = accuracy_score(np.argmax(y_test, axis=1), y_pred)
     confusion = confusion_matrix(np.argmax(y_test, axis=1), y_pred)
     each_acc, aa = AA_andEachClassAccuracy(confusion)
@@ -554,40 +583,40 @@ def Patch(data,height_index,width_index):
     return patch
 
 # load the original image
-X, y = loadData(dataset)
+#X, y = loadData(dataset)
 
-height = y.shape[0]
-width = y.shape[1]
-PATCH_SIZE = windowSize
+#height = y.shape[0]
+#width = y.shape[1]
+#PATCH_SIZE = windowSize
 
-K = 3
-X,fa = applyFA(X, numComponents=K)
+#K = 3
+#X,fa = applyFA(X, numComponents=K)
 
-X = padWithZeros(X, PATCH_SIZE//2)
+#X = padWithZeros(X, PATCH_SIZE//2)
 
 
 
 # calculate the predicted image
-outputs = np.zeros((height,width))
-for i in range(height):
-    for j in range(width):
-        target = int(y[i,j])
-        if target == 0 :
-            continue
-        else :
-            image_patch=Patch(X,i,j)
-            X_test_image = image_patch.reshape(1,image_patch.shape[0],image_patch.shape[1], image_patch.shape[2], 1).astype('float32')                                   
-            prediction = (model.predict(X_test_image))
-            prediction = np.argmax(prediction, axis=1)
-            outputs[i][j] = prediction+1
+#outputs = np.zeros((height,width))
+#for i in range(height):
+#    for j in range(width):
+#        target = int(y[i,j])
+#        if target == 0 :
+#            continue
+#        else :
+#            image_patch=Patch(X,i,j)
+#            X_test_image = image_patch.reshape(1,image_patch.shape[0],image_patch.shape[1], #image_patch.shape[2], 1).astype('float32')                                   
+#            prediction = (model.predict(X_test_image))
+#            prediction = np.argmax(prediction, axis=1)
+#            outputs[i][j] = prediction+1
 
 # end prediction
 testing_time = time.perf_counter() - test_time1
 
 print("testing_time: ", testing_time)
 
-spectral.save_rgb("predictions.jpg", outputs.astype(int), colors=spectral.spy_colors)
-spectral.save_rgb(str(dataset)+"_ground_truth.jpg", y, colors=spectral.spy_colors)
+#spectral.save_rgb("predictions.jpg", outputs.astype(int), colors=spectral.spy_colors)
+#spectral.save_rgb(str(dataset)+"_ground_truth.jpg", y, colors=spectral.spy_colors)
 
 # total time
 total_time = training_time + testing_time
